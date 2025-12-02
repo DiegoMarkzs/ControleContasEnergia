@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -15,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.proj.controleenergia.ui.theme.ControleEnergiaTheme
@@ -23,28 +25,71 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent {
-            TelaAparelho(
-                aparelhos = listOf(
-                    Aparelho("Ventilador", android.R.drawable.ic_menu_camera, 120, 5),
-                    Aparelho("Geladeira", android.R.drawable.ic_menu_gallery, 300, 24)
-                )
+        setContent { AppControleEnergia() }
+    }
+}
+
+// APP COM NAVEGAÇÃO
+@Composable
+fun AppControleEnergia() {
+    var telaAtual by remember { mutableStateOf("lista") }
+
+    var listaAparelhos by remember {
+        mutableStateOf(
+            mutableListOf(
+                Aparelho("Ventilador", android.R.drawable.ic_menu_manage, 120, 5),
+                Aparelho("Geladeira", android.R.drawable.ic_menu_manage, 300, 24)
+            )
+        )
+    }
+
+    ControleEnergiaTheme {
+        when (telaAtual) {
+
+            "lista" -> TelaAparelho(
+                aparelhos = listaAparelhos,
+                onAdicionar = { telaAtual = "adicionar" },
+                onExcluir = { aparelho ->
+                    listaAparelhos = listaAparelhos.toMutableList().apply { remove(aparelho) }
+                }
+            )
+
+            "adicionar" -> TelaAdicionarAparelho(
+                onSalvar = { nome, potencia, uso ->
+                    val novo = Aparelho(
+                        nome = nome,
+                        imagem = android.R.drawable.ic_menu_manage,
+                        potenciaWatts = potencia.toIntOrNull() ?: 0,
+                        usoDiarioHoras = uso.toIntOrNull() ?: 0
+                    )
+                    listaAparelhos.add(novo)
+                    telaAtual = "lista"
+                },
+                onCancelar = { telaAtual = "lista" }
             )
         }
     }
 }
 
+// MODELO
+data class Aparelho(
+    val nome: String,
+    val imagem: Int,
+    val potenciaWatts: Int,
+    val usoDiarioHoras: Int
+)
+
+// TELA LISTA
 @Composable
-fun TelaAparelho(aparelhos: List<Aparelho>) {
+fun TelaAparelho(
+    aparelhos: List<Aparelho>,
+    onAdicionar: () -> Unit,
+    onExcluir: (Aparelho) -> Unit
+) {
 
     var valorKwm by remember { mutableStateOf("0.85") }
-
-    var listaAparelhos by remember { mutableStateOf(aparelhos.toMutableList()) }
-
     var totalMes by remember {
-        mutableStateOf(
-            calcularTotalMes(listaAparelhos, valorKwm.toDoubleOrNull() ?: 0.0)
-        )
+        mutableStateOf(calcularTotalMes(aparelhos, valorKwm.toDoubleOrNull() ?: 0.0))
     }
 
     Column(
@@ -55,7 +100,6 @@ fun TelaAparelho(aparelhos: List<Aparelho>) {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
 
-        // TOPO
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
 
             Text("Controle de conta de energia")
@@ -66,7 +110,6 @@ fun TelaAparelho(aparelhos: List<Aparelho>) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
 
-                // Valor KWM + botão recarregar
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(
                         value = valorKwm,
@@ -77,8 +120,10 @@ fun TelaAparelho(aparelhos: List<Aparelho>) {
 
                     IconButton(
                         onClick = {
-                            totalMes =
-                                calcularTotalMes(listaAparelhos, valorKwm.toDoubleOrNull() ?: 0.0)
+                            totalMes = calcularTotalMes(
+                                aparelhos,
+                                valorKwm.toDoubleOrNull() ?: 0.0
+                            )
                         }
                     ) {
                         Icon(Icons.Default.Refresh, contentDescription = "Recalcular")
@@ -89,36 +134,23 @@ fun TelaAparelho(aparelhos: List<Aparelho>) {
             }
         }
 
-        // MEIO: LISTA DE APARELHOS
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .padding(vertical = 16.dp),
-            verticalArrangement = Arrangement.Top
+                .padding(vertical = 16.dp)
         ) {
-            listaAparelhos.forEach { aparelho ->
+            aparelhos.forEach { aparelho ->
                 AparelhoItem(
                     aparelho = aparelho,
                     onEditar = {},
-                    onExcluir = {
-                        listaAparelhos = listaAparelhos.toMutableList().apply {
-                            remove(aparelho)
-                        }
-                        totalMes = calcularTotalMes(
-                            listaAparelhos,
-                            valorKwm.toDoubleOrNull() ?: 0.0
-                        )
-                    }
+                    onExcluir = { onExcluir(aparelho) }
                 )
             }
         }
 
-        // FUNDO: botão
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Button(onClick = {}) {
-                Text("Adicionar Aparelho")
-            }
+        Button(onClick = onAdicionar) {
+            Text("Adicionar Aparelho")
         }
     }
 }
@@ -133,11 +165,10 @@ fun AparelhoItem(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
 
-        // ESQUERDA: imagem + infos
         Row(verticalAlignment = Alignment.CenterVertically) {
             Image(
                 painter = painterResource(id = aparelho.imagem),
@@ -148,18 +179,16 @@ fun AparelhoItem(
             Spacer(modifier = Modifier.width(12.dp))
 
             Column {
-                Text(text = aparelho.nome)
-                Text(text = "Potência: ${aparelho.potenciaWatts}W")
-                Text(text = "Uso diário: ${aparelho.usoDiarioHoras}h/dia")
+                Text(aparelho.nome)
+                Text("Potência: ${aparelho.potenciaWatts}W")
+                Text("Uso diário: ${aparelho.usoDiarioHoras}h/dia")
             }
         }
 
-        // DIREITA: botões
         Row {
             IconButton(onClick = onEditar) {
                 Icon(Icons.Default.Edit, contentDescription = "Editar")
             }
-
             IconButton(onClick = onExcluir) {
                 Icon(Icons.Default.Delete, contentDescription = "Excluir")
             }
@@ -175,32 +204,73 @@ fun calcularTotalMes(aparelhos: List<Aparelho>, valorKwm: Double): Double {
     }
 }
 
+// TELA ADICIONAR
+@Composable
+fun TelaAdicionarAparelho(
+    onSalvar: (String, String, String) -> Unit,
+    onCancelar: () -> Unit
+) {
+
+    var nome by remember { mutableStateOf("") }
+    var potencia by remember { mutableStateOf("") }
+    var usoDiario by remember { mutableStateOf("") }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+
+            OutlinedTextField(
+                value = nome,
+                onValueChange = { nome = it },
+                label = { Text("Nome do aparelho") }
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            OutlinedTextField(
+                value = potencia,
+                onValueChange = { potencia = it },
+                label = { Text("Potência (W)") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            OutlinedTextField(
+                value = usoDiario,
+                onValueChange = { usoDiario = it },
+                label = { Text("Uso diário (h)") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Button(onClick = { onSalvar(nome, potencia, usoDiario) }) {
+                    Text("Salvar")
+                }
+
+                Button(onClick = onCancelar) {
+                    Text("Cancelar")
+                }
+            }
+        }
+    }
+}
+
+// PREVIEW
 @Preview(showBackground = true)
 @Composable
 fun GreetingPreview() {
     ControleEnergiaTheme {
-        TelaAparelho(
-            aparelhos = listOf(
-                Aparelho(
-                    nome = "Ventilador",
-                    imagem = android.R.drawable.ic_menu_camera,
-                    potenciaWatts = 120,
-                    usoDiarioHoras = 5
-                ),
-                Aparelho(
-                    nome = "Micro-Ondas",
-                    imagem = android.R.drawable.ic_menu_camera,
-                    potenciaWatts = 90,
-                    usoDiarioHoras = 9
-                )
-            )
-        )
+        AppControleEnergia()
     }
 }
-
-data class Aparelho(
-    val nome: String,
-    val imagem: Int,
-    val potenciaWatts: Int,
-    val usoDiarioHoras: Int
-)
