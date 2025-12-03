@@ -28,7 +28,6 @@ class MainActivity : ComponentActivity() {
         setContent { AppControleEnergia() }
     }
 }
-
 // APP COM NAVEGAÇÃO
 @Composable
 fun AppControleEnergia() {
@@ -43,12 +42,18 @@ fun AppControleEnergia() {
         )
     }
 
+    var aparelhoEditando by remember { mutableStateOf<Aparelho?>(null) }
+
     ControleEnergiaTheme {
         when (telaAtual) {
 
             "lista" -> TelaAparelho(
                 aparelhos = listaAparelhos,
                 onAdicionar = { telaAtual = "adicionar" },
+                onEditar = { aparelho ->
+                    aparelhoEditando = aparelho
+                    telaAtual = "editar"
+                },
                 onExcluir = { aparelho ->
                     listaAparelhos = listaAparelhos.toMutableList().apply { remove(aparelho) }
                 }
@@ -67,10 +72,30 @@ fun AppControleEnergia() {
                 },
                 onCancelar = { telaAtual = "lista" }
             )
+
+            "editar" -> aparelhoEditando?.let { aparelho ->
+                TelaEditarAparelho(
+                    aparelho = aparelho,
+                    onSalvar = { nome, potencia, uso ->
+                        val atualizado = aparelho.copy(
+                            nome = nome,
+                            potenciaWatts = potencia.toIntOrNull() ?: 0,
+                            usoDiarioHoras = uso.toIntOrNull() ?: 0
+                        )
+
+                        listaAparelhos = listaAparelhos.toMutableList().apply {
+                            val index = indexOf(aparelho)
+                            set(index, atualizado)
+                        }
+
+                        telaAtual = "lista"
+                    },
+                    onCancelar = { telaAtual = "lista" }
+                )
+            }
         }
     }
 }
-
 // MODELO
 data class Aparelho(
     val nome: String,
@@ -78,12 +103,12 @@ data class Aparelho(
     val potenciaWatts: Int,
     val usoDiarioHoras: Int
 )
-
 // TELA LISTA
 @Composable
 fun TelaAparelho(
     aparelhos: List<Aparelho>,
     onAdicionar: () -> Unit,
+    onEditar: (Aparelho) -> Unit,
     onExcluir: (Aparelho) -> Unit
 ) {
 
@@ -143,9 +168,10 @@ fun TelaAparelho(
             aparelhos.forEach { aparelho ->
                 AparelhoItem(
                     aparelho = aparelho,
-                    onEditar = {},
+                    onEditar = { onEditar(aparelho) },
                     onExcluir = { onExcluir(aparelho) }
                 )
+
             }
         }
 
@@ -203,7 +229,6 @@ fun calcularTotalMes(aparelhos: List<Aparelho>, valorKwm: Double): Double {
         consumoMensal * valorKwm
     }
 }
-
 // TELA ADICIONAR
 @Composable
 fun TelaAdicionarAparelho(
@@ -222,10 +247,7 @@ fun TelaAdicionarAparelho(
         contentAlignment = Alignment.Center
     ) {
 
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
 
             OutlinedTextField(
                 value = nome,
@@ -265,7 +287,68 @@ fun TelaAdicionarAparelho(
         }
     }
 }
+// TELA EDITAR
+@Composable
+fun TelaEditarAparelho(
+    aparelho: Aparelho,
+    onSalvar: (String, String, String) -> Unit,
+    onCancelar: () -> Unit
+) {
 
+    var nome by remember { mutableStateOf(aparelho.nome) }
+    var potencia by remember { mutableStateOf(aparelho.potenciaWatts.toString()) }
+    var usoDiario by remember { mutableStateOf(aparelho.usoDiarioHoras.toString()) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+
+            OutlinedTextField(
+                value = nome,
+                onValueChange = { nome = it },
+                label = { Text("Nome do aparelho") }
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            OutlinedTextField(
+                value = potencia,
+                onValueChange = { potencia = it },
+                label = { Text("Potência (W)") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            OutlinedTextField(
+                value = usoDiario,
+                onValueChange = { usoDiario = it },
+                label = { Text("Uso diário (h)") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+
+                Button(onClick = onCancelar) {
+                    Text("Cancelar")
+                }
+
+                Button(onClick = {
+                    onSalvar(nome, potencia, usoDiario)
+                }) {
+                    Text("Salvar")
+                }
+            }
+        }
+    }
+}
 // PREVIEW
 @Preview(showBackground = true)
 @Composable
